@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drift</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <canvas id="stars" aria-hidden="true"></canvas>
+    <div class="release-layer" id="release-layer" aria-hidden="true"></div>
+    <main class="shell">
+      <section class="intro" aria-labelledby="app-title">
+        <h1 id="app-title" aria-label="drift.">drift<span aria-hidden="true">.</span></h1>
+      </section>
+
+      <section class="orb-gateway" aria-label="Emotional release">
+        <button class="pressure-orb" id="pressure-orb" type="button" aria-describedby="orb-instruction">
+          <svg class="orb-blob" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            <defs>
+              <radialGradient id="orb-fill" cx="39%" cy="31%" r="74%">
+                <stop offset="0%" stop-color="rgba(245, 240, 255, 0.5)" />
+                <stop offset="54%" stop-color="rgba(123, 147, 190, 0.28)" />
+                <stop offset="100%" stop-color="rgba(123, 147, 190, 0.1)" />
+              </radialGradient>
+              <radialGradient id="orb-surface" cx="35%" cy="24%" r="52%">
+                <stop offset="0%" stop-color="rgba(255, 255, 255, 0.32)" />
+                <stop offset="100%" stop-color="rgba(255, 255, 255, 0)" />
+              </radialGradient>
+              <filter id="orb-soften">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="0.75" />
+              </filter>
+            </defs>
+            <path class="orb-blob-path" id="orb-blob-path" d="" />
+            <circle class="orb-release-ripple" id="orb-release-ripple" cx="50" cy="50" r="0" />
+            <path class="orb-blob-highlight" id="orb-blob-highlight" d="" />
+          </svg>
+          <span class="orb-core" aria-hidden="true"></span>
+        </button>
+        <p class="orb-instruction" id="orb-instruction">press and hold</p>
+        <p class="orb-secondary">no rush.</p>
+        <p class="orb-message" id="orb-message" aria-live="polite"></p>
+        <section class="support-choice" id="support-choice" aria-label="Support choice">
+          <h2>What would help?</h2>
+          <div class="support-options">
+            <button type="button" data-support="quiet">Quiet</button>
+            <button type="button" data-support="unload">Say more</button>
+            <button type="button" data-support="ground">Ground me</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="journal" aria-label="Thought entry">
+        <p class="journal-prompt">Say more</p>
+        <label class="sr-only" for="thought">What is on your mind?</label>
+        <textarea
+          id="thought"
+          rows="8"
+          placeholder="What's on your mind?"
+          autocomplete="off"
+          spellcheck="true"
+        ></textarea>
+        <button id="drift-button" type="button">Let it drift</button>
+        <button class="soft-exit" id="journal-exit" type="button">Maybe later</button>
+      </section>
+
+      <section class="reflection-view" aria-label="Reflection">
+        <button class="home-button" id="home-button" type="button">Start again</button>
+        <div class="entries" id="entries" aria-live="polite" aria-label="Reflections"></div>
+      </section>
+
+      <section class="sit-view" aria-label="Quiet pause">
+        <div class="breathing-glow" aria-hidden="true"></div>
+        <p class="sit-kicker">quiet</p>
+        <h2>Nothing to solve.</h2>
+        <p class="sit-copy">
+          Take a breath.
+        </p>
+        <div class="sit-controls" aria-label="Pause controls">
+          <button id="sit-new-thought" type="button">Start again</button>
+        </div>
+      </section>
+
+      <section class="ground-view" aria-label="Grounding">
+        <p class="ground-kicker">ground</p>
+        <h2>Touch five points.</h2>
+        <div class="ground-field" id="ground-field" aria-label="Touch five points">
+          <button type="button" class="ground-star" style="--x: 18%; --y: 24%"></button>
+          <button type="button" class="ground-star" style="--x: 72%; --y: 18%"></button>
+          <button type="button" class="ground-star" style="--x: 48%; --y: 42%"></button>
+          <button type="button" class="ground-star" style="--x: 25%; --y: 68%"></button>
+          <button type="button" class="ground-star" style="--x: 78%; --y: 72%"></button>
+        </div>
+        <p class="ground-message" id="ground-message" aria-live="polite"></p>
+        <button class="ground-reset" id="ground-new-thought" type="button">Start again</button>
+        <button class="soft-exit" id="ground-exit" type="button">Maybe later</button>
+      </section>
+
+      <section class="saved-view" aria-label="Saved thought">
+        <p class="saved-kicker">saved</p>
+        <h2>Kept for later.</h2>
+        <p class="saved-copy">Only in this session.</p>
+        <div class="saved-card" id="saved-card"></div>
+        <div class="saved-controls">
+          <button id="saved-return" type="button">Back to reflection</button>
+          <button id="saved-new-thought" type="button">Start again</button>
+        </div>
+      </section>
+    </main>
+
+    <template id="entry-template">
+      <article class="thought-card">
+        <div class="card-topline">
+          <span class="label"></span>
+          <time></time>
+        </div>
+        <p class="thought-text"></p>
+        <p class="reflection"></p>
+        <div class="actions" aria-label="Soft actions">
+          <button type="button">Pause</button>
+          <button type="button">Keep it</button>
+          <button type="button">Let it drift</button>
+          <button type="button">One small thing</button>
+          <button type="button">Leave it here</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
