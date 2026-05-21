@@ -103,6 +103,11 @@ let stars = [];
 let warmParticles = [];
 let residueParticles = [];
 let pressureParticles = [];
+let quietDistantStar = null;
+let quietDiscoveryStars = [];
+let quietShootingStars = [];
+let quietStartedAt = 0;
+let nextQuietShootingStarAt = 0;
 let width = 0;
 let height = 0;
 let pixelRatio = 1;
@@ -126,6 +131,9 @@ let hapticInterval = null;
 let hapticTimeout = null;
 let supportChoiceTimer = null;
 let orbMessageTimer = null;
+let quietReturnTimer = null;
+let quietReturnHoldTimer = null;
+let homeReturnTimer = null;
 let touchedGroundStars = 0;
 
 function buildOrbCirclePath(radius = 38) {
@@ -245,6 +253,38 @@ function createPressureParticle() {
   };
 }
 
+function createQuietDiscoveryStars(createdAt) {
+  return Array.from({ length: 9 }, (_, index) => ({
+    x: width * (0.12 + Math.random() * 0.76),
+    y: height * (0.12 + Math.random() * 0.74),
+    radius: Math.random() * 0.85 + 0.35,
+    alpha: Math.random() * 0.08 + 0.035,
+    revealDelay: 1800 + index * 1900 + Math.random() * 2600,
+    pulse: Math.random() * Math.PI * 2,
+    drift: Math.random() * 0.018 + 0.006,
+    createdAt,
+  }));
+}
+
+function createQuietShootingStar(now = performance.now()) {
+  const fromLeft = Math.random() > 0.5;
+  const y = height * (0.12 + Math.random() * 0.48);
+  const speed = Math.random() * 2.2 + 2.8;
+  return {
+    x: fromLeft ? -40 : width + 40,
+    y,
+    vx: (fromLeft ? 1 : -1) * speed,
+    vy: speed * (Math.random() * 0.18 + 0.08),
+    length: Math.random() * 46 + 54,
+    life: Math.random() * 900 + 1250,
+    createdAt: now,
+  };
+}
+
+function scheduleNextQuietShootingStar(now = performance.now()) {
+  nextQuietShootingStarAt = now + 6500 + Math.random() * 10500;
+}
+
 function drawStars(time = 0) {
   ctx.clearRect(0, 0, width, height);
   const releaseAge = releaseStartedAt ? time - releaseStartedAt : releaseDuration;
@@ -285,6 +325,7 @@ function drawStars(time = 0) {
   updateOrbBlob(exhaleBloom);
   const pressureIntensity = pressureDepth;
   const sitIntensity = isSitting ? 1 : 0;
+  const quietIntensity = document.body.classList.contains("quiet-space") ? 1 : 0;
   const aftercareDriftScale =
     aftercareMode === "quiet" ? 0.52 : aftercareMode === "movement" ? 1.12 : 1;
   const moodDriftScale =
@@ -293,10 +334,19 @@ function drawStars(time = 0) {
   const careIntensity = ambientMood === "care" && aftercareMode !== "quiet" ? 1 : 0;
   const practicalMovement = ambientMood === "practical" ? 0.03 : 0;
   const aftercareMovement = aftercareMode === "movement" ? 0.025 : 0;
+  const quietTouchAge = time - movementTouch.lastSeen;
+  const quietTouchFade = quietIntensity
+    ? movementTouch.active
+      ? 1
+      : Math.max(0, 1 - quietTouchAge / 2200)
+    : 0;
+  const quietTouchActive = quietIntensity && quietTouchFade > 0.01;
   const movementTouchActive =
-    aftercareMode === "movement" && movementTouch.active && time - movementTouch.lastSeen < 1400;
+    quietTouchActive || (aftercareMode === "movement" && movementTouch.active && time - movementTouch.lastSeen < 1400);
   const centerX = width * 0.5;
   const centerY = height * 0.48;
+  const quietAge = quietStartedAt ? time - quietStartedAt : 0;
+  const quietPresence = quietIntensity ? Math.min(1, quietAge / 9000) : 0;
   const touchGatherStrength =
     isHoldingPressure && orbTouch.screenX && orbTouch.screenY
       ? Math.min(1, pressureIntensity * 1.15 + 0.08)
@@ -310,6 +360,23 @@ function drawStars(time = 0) {
   haze.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = haze;
   ctx.fillRect(0, 0, width, height);
+
+  if (quietIntensity) {
+    const quietDrift = Math.sin(time * 0.00012) * 0.5 + 0.5;
+    const quietHaze = ctx.createRadialGradient(
+      width * (0.34 + quietDrift * 0.22),
+      height * (0.22 + quietPresence * 0.08),
+      0,
+      width * (0.34 + quietDrift * 0.22),
+      height * (0.22 + quietPresence * 0.08),
+      Math.max(width, height) * 0.68,
+    );
+    quietHaze.addColorStop(0, `rgba(136, 157, 190, ${0.026 * quietPresence})`);
+    quietHaze.addColorStop(0.55, `rgba(79, 113, 143, ${0.016 * quietPresence})`);
+    quietHaze.addColorStop(1, "rgba(79, 113, 143, 0)");
+    ctx.fillStyle = quietHaze;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   if (exhaleBloom) {
     const waveRadius = Math.min(width, height) * (0.18 + exhaleBloomProgress * 0.95);
@@ -370,6 +437,22 @@ function drawStars(time = 0) {
     ctx.fillRect(0, 0, width, height);
   }
 
+  if (quietTouchActive) {
+    const roomBloom = ctx.createRadialGradient(
+      movementTouch.x,
+      movementTouch.y,
+      0,
+      movementTouch.x,
+      movementTouch.y,
+      Math.min(width, height) * 0.44,
+    );
+    roomBloom.addColorStop(0, `rgba(218, 226, 242, ${0.075 * quietTouchFade})`);
+    roomBloom.addColorStop(0.48, `rgba(118, 150, 184, ${0.032 * quietTouchFade})`);
+    roomBloom.addColorStop(1, "rgba(118, 150, 184, 0)");
+    ctx.fillStyle = roomBloom;
+    ctx.fillRect(0, 0, width, height);
+  }
+
   stars.forEach((star) => {
     const focusX = releaseFocus.x || width * 0.5;
     const focusY = releaseFocus.y || height * 0.5;
@@ -381,27 +464,29 @@ function drawStars(time = 0) {
     const touchDistance = movementTouchActive
       ? Math.hypot(star.x - movementTouch.x, star.y - movementTouch.y)
       : Infinity;
-    const touchNear = movementTouchActive ? Math.max(0, 1 - touchDistance / 220) : 0;
+    const touchRadius = quietTouchActive ? Math.min(width, height) * 0.38 : 220;
+    const touchNear = movementTouchActive ? Math.max(0, 1 - touchDistance / touchRadius) : 0;
+    const quietPush = quietTouchActive ? quietTouchFade : 0;
 
     star.y -= star.drift * driftScale * (1 + releaseLift * 7);
     star.x +=
       Math.sin(time * 0.00008 + star.pulse) * (0.018 + practicalMovement + aftercareMovement + releaseIntensity * 0.08 + sitIntensity * 0.012 + exhaleBloom * 0.035) +
       ((star.x - focusX) / Math.max(width, 1)) * releaseLift * 0.9 +
       ((star.x - centerX) / Math.max(width, 1)) * (exhaleIntensity * 3.45 + exhaleBloom * 3.1) * pressureNear +
-      ((star.x - movementTouch.x) / Math.max(width, 1)) * touchNear * 0.7;
+      ((star.x - movementTouch.x) / Math.max(width, 1)) * touchNear * (0.7 + quietPush * 7.2);
     star.y +=
       ((star.y - centerY) / Math.max(height, 1)) * (exhaleIntensity * 2.85 + exhaleBloom * 2.5) * pressureNear +
-      ((star.y - movementTouch.y) / Math.max(height, 1)) * touchNear * 0.55;
+      ((star.y - movementTouch.y) / Math.max(height, 1)) * touchNear * (0.55 + quietPush * 5.4);
 
     if (star.y < -4) {
       star.y = height + 4;
       star.x = Math.random() * width;
     }
 
-    const quietAlpha = aftercareMode === "quiet" ? -0.06 : 0;
+    const quietAlpha = aftercareMode === "quiet" ? -0.12 : 0;
     const twinkle = Math.sin(time * 0.0007 + star.pulse) * 0.12;
-    const starAlpha = Math.max(0.06, star.alpha + quietAlpha + twinkle + releaseLift * 0.35 + touchNear * 0.08 + exhaleBloom * pressureNear * 0.18);
-    const starSize = star.radius * (1 + releaseLift * 0.85 + exhaleBloom * pressureNear * 0.65);
+    const starAlpha = Math.max(0.06, star.alpha + quietAlpha + twinkle + releaseLift * 0.35 + touchNear * (0.08 + quietPush * 0.12) + exhaleBloom * pressureNear * 0.18);
+    const starSize = star.radius * (1 + releaseLift * 0.85 + exhaleBloom * pressureNear * 0.65 + touchNear * quietPush * 0.7);
 
     if (star.halo) {
       const halo = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, starSize * 5.8);
@@ -488,6 +573,99 @@ function drawStars(time = 0) {
       ctx.beginPath();
       ctx.fillStyle = `rgba(214, 224, 238, ${Math.max(0, opacity)})`;
       ctx.arc(particle.x, particle.y, particle.radius * (1 + progress * 0.75), 0, Math.PI * 2);
+      ctx.fill();
+      return true;
+    });
+  }
+
+  if (quietDistantStar) {
+    const age = time - quietDistantStar.createdAt;
+    const drift = Math.sin(time * 0.00018 + quietDistantStar.pulse) * 0.025;
+    quietDistantStar.x += drift;
+    quietDistantStar.y -= 0.006;
+
+    const occasionalTwinkle = Math.max(0, Math.sin(time * 0.00042 + quietDistantStar.pulse) - 0.72) * 0.22;
+    const opacity = quietDistantStar.alpha + occasionalTwinkle;
+    const radius = quietDistantStar.radius * (1 + occasionalTwinkle * 0.9);
+
+    const distantHalo = ctx.createRadialGradient(
+      quietDistantStar.x,
+      quietDistantStar.y,
+      0,
+      quietDistantStar.x,
+      quietDistantStar.y,
+      radius * 7,
+    );
+    distantHalo.addColorStop(0, `rgba(222, 229, 244, ${opacity * 0.18})`);
+    distantHalo.addColorStop(1, "rgba(222, 229, 244, 0)");
+    ctx.fillStyle = distantHalo;
+    ctx.beginPath();
+    ctx.arc(quietDistantStar.x, quietDistantStar.y, radius * 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(236, 239, 248, ${opacity})`;
+    ctx.beginPath();
+    ctx.arc(quietDistantStar.x, quietDistantStar.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (quietIntensity && quietDiscoveryStars.length) {
+    quietDiscoveryStars.forEach((star) => {
+      const age = time - star.createdAt - star.revealDelay;
+      const reveal = Math.min(Math.max(age / 5200, 0), 1);
+
+      if (!reveal) {
+        return;
+      }
+
+      star.x += Math.sin(time * 0.00009 + star.pulse) * star.drift;
+      star.y -= star.drift * 0.12;
+
+      const twinkle = Math.max(0, Math.sin(time * 0.00036 + star.pulse) - 0.62) * 0.1;
+      const opacity = (star.alpha + twinkle) * Math.sin(reveal * Math.PI * 0.5);
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(226, 232, 245, ${opacity})`;
+      ctx.arc(star.x, star.y, star.radius * (1 + twinkle * 1.4), 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  if (quietIntensity && time > nextQuietShootingStarAt) {
+    quietShootingStars.push(createQuietShootingStar(time));
+    scheduleNextQuietShootingStar(time);
+  }
+
+  if (quietShootingStars.length) {
+    quietShootingStars = quietShootingStars.filter((star) => {
+      const age = time - star.createdAt;
+      const progress = Math.min(age / star.life, 1);
+
+      if (progress >= 1) {
+        return false;
+      }
+
+      star.x += star.vx;
+      star.y += star.vy;
+
+      const opacity = Math.sin(progress * Math.PI) * 0.22;
+      const length = star.length * (0.65 + progress * 0.45);
+      const distance = Math.max(Math.hypot(star.vx, star.vy), 1);
+      const tailX = (star.vx / distance) * length;
+      const tailY = (star.vy / distance) * length;
+
+      const trail = ctx.createLinearGradient(star.x, star.y, star.x - tailX, star.y - tailY);
+      trail.addColorStop(0, `rgba(235, 240, 250, ${opacity})`);
+      trail.addColorStop(1, "rgba(235, 240, 250, 0)");
+      ctx.strokeStyle = trail;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(star.x, star.y);
+      ctx.lineTo(star.x - tailX, star.y - tailY);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(240, 243, 250, ${opacity * 0.75})`;
+      ctx.arc(star.x, star.y, 1.15, 0, Math.PI * 2);
       ctx.fill();
       return true;
     });
@@ -802,8 +980,11 @@ function resetToJournal() {
   savedCard.textContent = "";
   formInput.value = "";
   formInput.style.height = "";
+  clearTimeout(homeReturnTimer);
+  clearTimeout(quietReturnTimer);
+  clearTimeout(quietReturnHoldTimer);
   setAftercareMode("none");
-  document.body.classList.remove("reflection-mode", "sit-mode", "saved-mode", "words-mode", "ground-mode");
+  document.body.classList.remove("reflection-mode", "sit-mode", "saved-mode", "words-mode", "ground-mode", "quiet-space", "quiet-return-ready", "quiet-return-holding", "quiet-return-home");
   groundMessage.textContent = "";
   groundNewThoughtButton.classList.remove("is-visible");
   groundStars.forEach((star) => star.classList.remove("touched"));
@@ -814,6 +995,11 @@ function resetToJournal() {
 function startPressureHold(event) {
   event.preventDefault();
 
+  if (document.body.classList.contains("quiet-space")) {
+    startQuietReturnHold(event);
+    return;
+  }
+
   if (isHoldingPressure) {
     return;
   }
@@ -822,15 +1008,58 @@ function startPressureHold(event) {
   clearTimeout(supportChoiceTimer);
   supportChoice.classList.remove("is-visible");
   orbMessage.textContent = "";
+  setAftercareMode("none");
+  isSitting = false;
+  quietDistantStar = null;
+  quietDiscoveryStars = [];
+  quietShootingStars = [];
+  quietStartedAt = 0;
+  nextQuietShootingStarAt = 0;
   isHoldingPressure = true;
   isReboundingPressure = false;
   pressureStartedAt = performance.now();
   pressureDepth = 0;
   exhaleStartedAt = 0;
-  document.body.classList.remove("pressure-released", "pressure-rebounding", "support-ready");
+  document.body.classList.remove("pressure-released", "pressure-rebounding", "support-ready", "quiet-space", "quiet-return-ready", "quiet-return-holding", "quiet-return-home");
   document.body.classList.add("pressure-holding");
   pressureOrb.setPointerCapture?.(event.pointerId);
   startHaptics();
+}
+
+function startQuietReturnHold(event) {
+  event.preventDefault();
+
+  if (!document.body.classList.contains("quiet-return-ready")) {
+    return;
+  }
+
+  clearTimeout(quietReturnHoldTimer);
+  document.body.classList.add("quiet-return-holding");
+  pressureOrb.setPointerCapture?.(event.pointerId);
+  navigator.vibrate?.(12);
+
+  quietReturnHoldTimer = window.setTimeout(() => {
+    returnHomeFromQuiet();
+  }, reduceMotion.matches ? 120 : 520);
+}
+
+function endQuietReturnHold(event) {
+  clearTimeout(quietReturnHoldTimer);
+  document.body.classList.remove("quiet-return-holding");
+  pressureOrb.releasePointerCapture?.(event.pointerId);
+}
+
+function returnHomeFromQuiet() {
+  clearTimeout(quietReturnHoldTimer);
+  clearTimeout(homeReturnTimer);
+  document.body.classList.remove("quiet-return-holding");
+  document.body.classList.add("quiet-return-home");
+  orbMessage.textContent = "";
+  navigator.vibrate?.(10);
+
+  homeReturnTimer = window.setTimeout(() => {
+    resetPressureGateway(true);
+  }, reduceMotion.matches ? 120 : 850);
 }
 
 function updateOrbTouch(event, immediate = false) {
@@ -868,6 +1097,11 @@ function movePressureHold(event) {
 }
 
 function endPressureHold(event) {
+  if (document.body.classList.contains("quiet-return-holding")) {
+    endQuietReturnHold(event);
+    return;
+  }
+
   if (!isHoldingPressure) {
     return;
   }
@@ -1000,10 +1234,19 @@ function stopHaptics() {
 function revealWords() {
   setAftercareMode("none");
   stopHaptics();
+  clearTimeout(homeReturnTimer);
+  clearTimeout(quietReturnTimer);
+  clearTimeout(quietReturnHoldTimer);
+  isSitting = false;
+  quietDistantStar = null;
+  quietDiscoveryStars = [];
+  quietShootingStars = [];
+  quietStartedAt = 0;
+  nextQuietShootingStarAt = 0;
   isHoldingPressure = false;
   isReboundingPressure = false;
   pressureDepth = 0;
-  document.body.classList.remove("pressure-holding", "pressure-released", "pressure-rebounding", "support-ready");
+  document.body.classList.remove("pressure-holding", "pressure-released", "pressure-rebounding", "support-ready", "quiet-space", "quiet-return-ready", "quiet-return-holding", "quiet-return-home");
   document.body.classList.add("words-mode", "has-interacted");
   clearTimeout(orbMessageTimer);
   supportChoice.classList.remove("is-visible");
@@ -1012,26 +1255,60 @@ function revealWords() {
 }
 
 function openQuietSupport() {
-  isSitting = true;
   setAftercareMode("quiet");
   stopHaptics();
-  document.body.classList.remove("pressure-holding", "pressure-released", "words-mode", "reflection-mode", "saved-mode", "ground-mode");
-  document.body.classList.add("sit-mode", "has-interacted");
+  const now = performance.now();
+  clearTimeout(quietReturnTimer);
+  clearTimeout(quietReturnHoldTimer);
+  isSitting = false;
+  isHoldingPressure = false;
+  isReboundingPressure = false;
+  document.body.classList.remove("pressure-holding", "pressure-rebounding", "words-mode", "reflection-mode", "saved-mode", "ground-mode", "sit-mode", "quiet-return-ready", "quiet-return-holding", "quiet-return-home");
+  document.body.classList.add("quiet-space");
   supportChoice.classList.remove("is-visible");
-  orbMessage.textContent = "";
-  window.scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" });
+  quietDistantStar = createQuietDistantStar();
+  quietDiscoveryStars = createQuietDiscoveryStars(now);
+  quietShootingStars = [];
+  quietStartedAt = now;
+  scheduleNextQuietShootingStar(now + 1200);
+  orbMessage.textContent = "A little room.";
+  quietReturnTimer = window.setTimeout(() => {
+    if (document.body.classList.contains("quiet-space")) {
+      document.body.classList.add("quiet-return-ready");
+    }
+  }, reduceMotion.matches ? 1200 : 6800);
+}
+
+function createQuietDistantStar() {
+  const side = Math.random() > 0.5 ? 1 : -1;
+  return {
+    x: width * (side > 0 ? 0.68 + Math.random() * 0.18 : 0.14 + Math.random() * 0.18),
+    y: height * (0.18 + Math.random() * 0.32),
+    radius: Math.random() * 0.7 + 0.55,
+    alpha: Math.random() * 0.08 + 0.1,
+    pulse: Math.random() * Math.PI * 2,
+    createdAt: performance.now(),
+  };
 }
 
 function openGroundMode() {
   setAftercareMode("none");
   stopHaptics();
+  clearTimeout(homeReturnTimer);
+  clearTimeout(quietReturnTimer);
+  clearTimeout(quietReturnHoldTimer);
+  quietDistantStar = null;
+  quietDiscoveryStars = [];
+  quietShootingStars = [];
+  quietStartedAt = 0;
+  nextQuietShootingStarAt = 0;
   isHoldingPressure = false;
   pressureDepth = 0;
   touchedGroundStars = 0;
   groundMessage.textContent = "";
   groundNewThoughtButton.classList.remove("is-visible");
   groundStars.forEach((star) => star.classList.remove("touched"));
-  document.body.classList.remove("pressure-holding", "pressure-released", "words-mode", "reflection-mode", "sit-mode", "saved-mode");
+  document.body.classList.remove("pressure-holding", "pressure-released", "words-mode", "reflection-mode", "sit-mode", "saved-mode", "quiet-space", "quiet-return-ready", "quiet-return-holding", "quiet-return-home");
   document.body.classList.add("ground-mode", "has-interacted");
   supportChoice.classList.remove("is-visible");
   orbMessage.textContent = "";
@@ -1052,19 +1329,34 @@ function handleSupportChoice(choice) {
   revealWords();
 }
 
-function resetPressureGateway() {
+function resetPressureGateway(softHome = false) {
   stopHaptics();
+  clearTimeout(homeReturnTimer);
+  clearTimeout(quietReturnTimer);
+  clearTimeout(quietReturnHoldTimer);
   isHoldingPressure = false;
   pressureDepth = 0;
   orbTouch = { x: 0, y: 0, targetX: 0, targetY: 0, wobbleX: 0, wobbleY: 0, screenX: 0, screenY: 0 };
   exhaleStartedAt = 0;
   residueParticles = [];
+  quietDistantStar = null;
+  quietDiscoveryStars = [];
+  quietShootingStars = [];
+  quietStartedAt = 0;
+  nextQuietShootingStarAt = 0;
   pressureParticles = pressureParticles.map(() => createPressureParticle());
   clearTimeout(orbMessageTimer);
   clearTimeout(supportChoiceTimer);
   supportChoice.classList.remove("is-visible");
   orbMessage.textContent = "";
-  document.body.classList.remove("pressure-holding", "pressure-released", "pressure-rebounding", "support-ready");
+  document.body.classList.remove("pressure-holding", "pressure-released", "pressure-rebounding", "support-ready", "quiet-space", "quiet-return-ready", "quiet-return-holding", "quiet-return-home", "home-soft-arrive");
+
+  if (softHome) {
+    document.body.classList.add("home-soft-arrive");
+    window.setTimeout(() => {
+      document.body.classList.remove("home-soft-arrive");
+    }, reduceMotion.matches ? 140 : 1150);
+  }
 }
 
 function touchGroundStar(star) {
@@ -1118,6 +1410,8 @@ pressureOrb.addEventListener("pointermove", movePressureHold);
 pressureOrb.addEventListener("pointerup", endPressureHold);
 pressureOrb.addEventListener("pointercancel", endPressureHold);
 pressureOrb.addEventListener("pointerleave", endPressureHold);
+pressureOrb.addEventListener("contextmenu", (event) => event.preventDefault());
+pressureOrb.addEventListener("dragstart", (event) => event.preventDefault());
 supportButtons.forEach((button) => {
   button.addEventListener("click", () => handleSupportChoice(button.dataset.support));
 });
@@ -1135,7 +1429,7 @@ aftercareButtons.forEach((button) => {
   button.addEventListener("click", () => setAftercareMode(button.dataset.aftercare));
 });
 window.addEventListener("pointermove", (event) => {
-  if (aftercareMode !== "movement") {
+  if (aftercareMode !== "movement" && !document.body.classList.contains("quiet-space")) {
     return;
   }
 
@@ -1145,6 +1439,48 @@ window.addEventListener("pointermove", (event) => {
     y: event.clientY,
     lastSeen: performance.now(),
   };
+});
+window.addEventListener("pointerdown", (event) => {
+  if (!document.body.classList.contains("quiet-space")) {
+    return;
+  }
+
+  event.preventDefault();
+
+  movementTouch = {
+    active: true,
+    x: event.clientX,
+    y: event.clientY,
+    lastSeen: performance.now(),
+  };
+});
+window.addEventListener("pointerup", () => {
+  if (!document.body.classList.contains("quiet-space")) {
+    return;
+  }
+
+  movementTouch.active = false;
+});
+window.addEventListener("pointercancel", () => {
+  if (!document.body.classList.contains("quiet-space")) {
+    return;
+  }
+
+  movementTouch.active = false;
+});
+window.addEventListener("contextmenu", (event) => {
+  if (!document.body.classList.contains("quiet-space")) {
+    return;
+  }
+
+  event.preventDefault();
+});
+window.addEventListener("dragstart", (event) => {
+  if (!document.body.classList.contains("quiet-space")) {
+    return;
+  }
+
+  event.preventDefault();
 });
 window.addEventListener("resize", resizeCanvas);
 

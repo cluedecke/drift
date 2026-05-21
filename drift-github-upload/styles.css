@@ -27,6 +27,12 @@
   box-sizing: border-box;
 }
 
+*,
+*::before,
+*::after {
+  -webkit-tap-highlight-color: transparent;
+}
+
 html {
   min-height: 100%;
   background: #060711;
@@ -44,6 +50,17 @@ body {
   overflow-x: hidden;
   transition: background 900ms ease;
   -webkit-tap-highlight-color: transparent;
+}
+
+body.quiet-space {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 body.mood-heavy {
@@ -146,6 +163,18 @@ body.pressure-released {
     radial-gradient(circle at 86% 22%, rgba(108, 166, 180, 0.16), transparent 30rem),
     radial-gradient(circle at 42% 86%, rgba(173, 112, 137, 0.12), transparent 32rem),
     linear-gradient(180deg, #080b19 0%, #0d1122 46%, #04050d 100%);
+}
+
+body.quiet-space {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(146, 163, 196, 0.075), transparent 34rem),
+    radial-gradient(circle at 18% 12%, rgba(80, 80, 132, 0.11), transparent 36rem),
+    radial-gradient(circle at 86% 22%, rgba(50, 92, 116, 0.075), transparent 32rem),
+    linear-gradient(180deg, #03050e 0%, #060916 48%, #01030a 100%);
+}
+
+body.quiet-space #stars {
+  opacity: 0.46;
 }
 
 .release-layer::before {
@@ -395,8 +424,18 @@ body.pressure-released .release-layer::before {
 }
 
 .pressure-orb:focus-visible {
-  outline: 2px solid rgba(208, 219, 226, 0.36);
-  outline-offset: 0.45rem;
+  outline: 0;
+  box-shadow:
+    0 0 0 1px rgba(208, 219, 226, 0.14),
+    0 0 44px rgba(151, 178, 206, 0.18);
+}
+
+body.quiet-space .pressure-orb:focus,
+body.quiet-space .pressure-orb:focus-visible {
+  outline: 0;
+  box-shadow:
+    0 0 34px rgba(151, 178, 206, 0.08),
+    0 0 92px rgba(86, 126, 158, 0.045);
 }
 
 body.pressure-holding .pressure-orb {
@@ -468,14 +507,115 @@ body.pressure-released .pressure-orb::after {
 }
 
 .orb-message {
+  position: absolute;
+  top: calc(50% + min(24vw, 6.75rem) + 2.65rem);
+  left: 50%;
+  width: min(100%, 22rem);
   min-height: 1.55rem;
   color: rgba(240, 235, 248, 0.88);
   opacity: 0;
+  transform: translateX(-50%);
   transition: opacity 900ms ease;
 }
 
 .orb-message:not(:empty) {
   opacity: 1;
+}
+
+body.quiet-space .orb-instruction,
+body.quiet-space .orb-secondary {
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+
+body.quiet-space .intro {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(-0.55rem);
+  transition:
+    opacity 1400ms ease,
+    filter 1400ms ease,
+    transform 1400ms ease;
+}
+
+body.quiet-space .pressure-orb {
+  position: fixed;
+  left: 50%;
+  top: auto;
+  bottom: 8.6rem;
+  z-index: 4;
+  width: min(22vw, 5.5rem);
+  min-width: 4.5rem;
+  opacity: 0;
+  filter: blur(14px) brightness(0.78);
+  transform: translate(-50%, 1.1rem) scale(0.62);
+  pointer-events: none;
+  transition:
+    opacity 2600ms cubic-bezier(0.2, 0.72, 0.16, 1),
+    filter 2600ms cubic-bezier(0.2, 0.72, 0.16, 1),
+    transform 2600ms cubic-bezier(0.2, 0.72, 0.16, 1),
+    box-shadow 2600ms ease;
+}
+
+body.quiet-space.quiet-return-ready .pressure-orb {
+  opacity: 0.32;
+  filter: blur(2.7px) brightness(0.88);
+  transform: translate(-50%, 0) scale(0.68);
+  pointer-events: auto;
+  box-shadow:
+    0 0 38px rgba(151, 178, 206, 0.1),
+    0 0 96px rgba(86, 126, 158, 0.055);
+}
+
+body.quiet-space.quiet-return-holding .pressure-orb {
+  opacity: 0.5;
+  filter: blur(1.2px) brightness(1.01);
+  transform: translate(-50%, 0) scale(0.7);
+}
+
+body.quiet-space.quiet-return-home .pressure-orb {
+  opacity: 0;
+  filter: blur(8px) brightness(0.92);
+  transform: translate(-50%, -0.15rem) scale(0.66);
+  transition:
+    opacity 760ms ease,
+    filter 760ms ease,
+    transform 760ms cubic-bezier(0.2, 0.72, 0.16, 1);
+}
+
+body.quiet-space.quiet-return-home .orb-message {
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+body.quiet-space .orb-message {
+  top: 48%;
+  max-width: 18rem;
+  color: rgba(240, 235, 248, 0.84);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.05rem, 4.7vw, 1.45rem);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+body.quiet-space .support-choice {
+  opacity: 0;
+  transform: translate(-50%, 1rem);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+body.home-soft-arrive .intro {
+  animation: home-title-soft-arrive 920ms cubic-bezier(0.2, 0.72, 0.16, 1) both;
+}
+
+body.home-soft-arrive .pressure-orb {
+  animation: home-orb-soft-arrive 980ms cubic-bezier(0.2, 0.72, 0.16, 1) both;
+}
+
+body.home-soft-arrive .orb-instruction,
+body.home-soft-arrive .orb-secondary {
+  animation: home-copy-soft-arrive 1050ms ease both;
 }
 
 .support-choice {
@@ -1496,6 +1636,49 @@ body.saved-mode .saved-view {
 
   100% {
     filter: saturate(1) brightness(1);
+  }
+}
+
+@keyframes home-title-soft-arrive {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(-0.25rem);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(clamp(1rem, 2.4vh, 1.35rem));
+  }
+}
+
+@keyframes home-orb-soft-arrive {
+  0% {
+    opacity: 0;
+    filter: blur(12px) brightness(0.86);
+    transform: scale(0.94);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+    transform: none;
+  }
+}
+
+@keyframes home-copy-soft-arrive {
+  0%,
+  22% {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translateY(0.35rem);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
   }
 }
 
